@@ -4,6 +4,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -28,20 +29,39 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private ArrayList<Float> xValue = new ArrayList<Float>();
 
-    private TextView currentX, currentY, currentZ, currentMag, currentFFTX,currentFFTY,currentFFTZ,currentFFTMag;
+    private TextView currentX, currentY, currentZ, currentMag, currentFFTMag;
 
 //Graph stuff for raw data
-private final Handler mHandler = new Handler();
-    private Runnable mTimer1;
-    private Runnable mTimer2;
-    private double graph2LastXValue = 5d;
+    int count;
+
+    private final Handler mHandler = new Handler();
     private LineGraphSeries seriesX;
-    private LineGraphSeries<DataPoint> seriesY;
-    private LineGraphSeries<DataPoint> seriesZ;
-    private LineGraphSeries<DataPoint> seriesMag;
+    private LineGraphSeries seriesY;
+    private LineGraphSeries seriesZ;
+    private LineGraphSeries seriesMag;
+
+
 
     //FFT graph
-    private LineGraphSeries<DataPoint> fftmSeries;
+    private int windowSize = 64;
+    private double doubleWindowSize = windowSize;
+
+    private LineGraphSeries<DataPoint> seriesFFTMag;
+    private FFT transform = new FFT(windowSize);
+
+    private ArrayList<Double> fftMag = new ArrayList<Double>();
+
+    double[] fftImaginary = new double[windowSize];
+    double[] fftMagDouble = new double[windowSize];
+
+    private double[] setImaginary() {
+        double[] temp= new double[windowSize];
+        for (int i = 0; i < windowSize; i++) {
+            temp[i] = 0;
+        }
+        return temp;
+    }
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,8 +80,8 @@ private final Handler mHandler = new Handler();
     public void initViews() {
     currentX = findViewById(R.id.currentX);
     currentY = findViewById(R.id.currentY);
-        currentZ = findViewById(R.id.currentZ);
-        currentMag = findViewById(R.id.currentMag);
+    currentZ = findViewById(R.id.currentZ);
+    currentMag = findViewById(R.id.currentMag);
 
     //GraphView Stuff
         //Raw
@@ -69,16 +89,46 @@ private final Handler mHandler = new Handler();
 
         // first series is a line
         seriesX = new LineGraphSeries<DataPoint>();
-        seriesX.setDrawDataPoints(true);
-        seriesX.setColor(-256);
+        seriesX.setColor(Color.RED);
         graph.addSeries(seriesX);
-//        graph.getViewport().setMinX(0);
-        graph.getViewport().setXAxisBoundsManual(true);
-//        graph.getViewport().setMaxX(40);
 
+        seriesY = new LineGraphSeries<DataPoint>();
+        seriesY.setColor(Color.GREEN);
+        graph.addSeries(seriesY);
+
+        seriesZ = new LineGraphSeries<DataPoint>();
+        seriesZ.setColor(Color.BLUE);
+        graph.addSeries(seriesZ);
+        seriesMag = new LineGraphSeries<DataPoint>();
+        seriesMag.setColor(Color.WHITE);
+        graph.addSeries(seriesMag);
+
+
+        graph.getViewport().setYAxisBoundsManual(true);
+        graph.getViewport().setMinY(-40);
+        graph.getViewport().setMaxY(40);
+
+        graph.getViewport().setXAxisBoundsManual(true);
+        graph.getViewport().setMinX(0);
+        graph.getViewport().setMaxX(64);
+
+        graph.getViewport().setBackgroundColor(Color.BLACK);
 
         //FFT graph
         GraphView fftGraph = (GraphView) findViewById(R.id.fftGraph);
+        seriesFFTMag = new LineGraphSeries<DataPoint>();
+
+        fftGraph.addSeries(seriesFFTMag);
+
+        fftGraph.getViewport().setYAxisBoundsManual(true);
+        fftGraph.getViewport().setMinY(-40);
+        fftGraph.getViewport().setMaxY(40);
+
+        fftGraph.getViewport().setXAxisBoundsManual(true);
+        fftGraph.getViewport().setMinX(0);
+        fftGraph.getViewport().setMaxX(64);
+
+
 
     }
 
@@ -89,65 +139,56 @@ private final Handler mHandler = new Handler();
     public void onPause(){
         super.onPause();
         sensorManager.unregisterListener(this);
-        mHandler.removeCallbacks(mTimer1);
-//        mHandler.removeCallbacks(mTimer2);
     }
 
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
+        count++;
+
         float[] accelValues = sensorEvent.values;
         x = accelValues[0];
         y = accelValues[1];
         z = accelValues[2];
         displayValues();
-        //wanna push new values into array, shift all array down, then get last one to plot.
-        xValue.add(x);
 
-    }
+        seriesX.appendData(new DataPoint(count,x), true, 256);
+        seriesY.appendData(new DataPoint(count,y), true, 256);
+        seriesZ.appendData(new DataPoint(count,z), true, 256);
+        seriesMag.appendData(new DataPoint(count,calcMagnitude()), true, 256);
 
-//    public DataPoint[] getX() {
-//        int count = 256;
-////        DataPoint[] values = new DataPoint[count];
-////        for (int i = 0; i < count; i++) {
-////            DataPoint v = new DataPoint(xValue.get(i), x);
-////            values[i] = v;
-////        }
-////        return values;
-////        DataPoint[] values = new DataPoint[count];
-////        return values[0];
-//
-//    }
+    //FFT data stuff
+        fftMag.add(calcMagnitude());
+
+        if(fftMag.size() == windowSize) {
+            fftImaginary = setImaginary();
+            for(int i = 0; i < windowSize; i++) {
+                fftMagDouble[i] = fftMag.get(i);
+            }
+            fftMag.remove(0);
+        }
+
+        transform.fft(fftMagDouble, fftImaginary);
+
+        // loop through and create new datapoint[]
+        DataPoint[] currentMagFFT = new DataPoint[windowSize];
+        for(int i = 0; i < windowSize; i++) {
+            currentMagFFT[i] =
+                    new DataPoint(i, fftMagDouble[i]);
+            }
+        seriesFFTMag.resetData(currentMagFFT);
+        }
+
+
 
     @Override
     public void onResume() {
         super.onResume();
         sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        mTimer1 = new Runnable() {
-            @SuppressLint("NewApi")
-            @Override
-            public void run() {
-                graph2LastXValue += 1d;
-                seriesX.appendData(new DataPoint(graph2LastXValue,calcMagnitude()), true, 256);
-            }
-        };
-        mHandler.postDelayed(mTimer1, 20);
-
-//        mTimer2 = new Runnable() {
-//            @Override
-//            public void run() {
-//                graph2LastXValue += 1d;
-//                seriesX.appendData(new DataPoint(graph2LastXValue, getX()), true, 256);
-//                mHandler.postDelayed(this, 200);
-//            }
-//        };
-//        mHandler.postDelayed(mTimer2, 1000);
     }
 
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int i) {
-
-    }
+    public void onAccuracyChanged(Sensor sensor, int i) {}
 
 
     public void displayValues(){
