@@ -11,6 +11,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 //graphView Stuff
@@ -20,16 +21,19 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 
 import java.util.ArrayList;
 
+import static java.lang.Math.pow;
+
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     private SensorManager sensorManager;
     private Sensor accelerometer;
 
-    private float x, y, z, fftX, fftY, fftZ;
+    private float x, y, z;
+    private double mag;
 
     private ArrayList<Float> xValue = new ArrayList<Float>();
 
-    private TextView currentX, currentY, currentZ, currentMag, currentFFTMag;
+    private TextView currentX, currentY, currentZ, currentMag, windowSizeView, sampleRateView;
 
 //Graph stuff for raw data
     int count;
@@ -45,14 +49,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //FFT graph
     private int windowSize = 64;
     private double doubleWindowSize = windowSize;
+    private SeekBar windowSizeBar;
+
+
+    private float sampleRate = 20;
+    private SeekBar sampleRateBar;
+
 
     private LineGraphSeries<DataPoint> seriesFFTMag;
     private FFT transform = new FFT(windowSize);
 
-    private ArrayList<Double> fftMag = new ArrayList<Double>();
-
     double[] fftImaginary = new double[windowSize];
     double[] fftMagDouble = new double[windowSize];
+
+    private ArrayList<Double> fftMag = new ArrayList<Double>();
+
+    GraphView fftGraph;
 
     private double[] setImaginary() {
         double[] temp= new double[windowSize];
@@ -74,6 +86,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
             sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+
+            //populate x fft for init
+        for(int i = 0; i < windowSize; i++) {
+            fftMagDouble[i] = 0;
+        }
+        fftImaginary = setImaginary();
+
+
     }
 
     //INITS
@@ -115,9 +135,50 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         graph.getViewport().setBackgroundColor(Color.BLACK);
 
         //FFT graph
-        GraphView fftGraph = (GraphView) findViewById(R.id.fftGraph);
+            updateGraph();
+
+        //fft slider shit
+        windowSizeView = findViewById(R.id.window_size_int);
+        sampleRateView = findViewById(R.id.sample_rate_int);
+
+        windowSizeBar = findViewById(R.id.windowSeekBar);
+        windowSizeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+
+                                                     @Override
+                                                     public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                                                         windowSize =(int) pow(2, (i+1)-1);
+                                                         transform.setWindowSize((windowSize));
+                                                         fftImaginary = new double[transform.getWindowSize()];
+                                                         fftMag.clear();
+                                                         fftMagDouble = new double[transform.getWindowSize()];
+                                                         updateGraph();
+
+                                                     }
+
+                                                     @Override
+                                                     public void onStartTrackingTouch(SeekBar seekBar) {
+
+                                                     }
+
+                                                     @Override
+                                                     public void onStopTrackingTouch(SeekBar seekBar) {
+
+                                                     }
+
+                                                 });
+            sampleRateBar = findViewById(R.id.sampleRateSeekBar);
+
+
+    }
+
+
+
+    public void updateGraph() {
         seriesFFTMag = new LineGraphSeries<DataPoint>();
 
+        fftGraph = (GraphView) findViewById(R.id.fftGraph);
+        fftGraph.removeAllSeries();
         fftGraph.addSeries(seriesFFTMag);
 
         fftGraph.getViewport().setYAxisBoundsManual(true);
@@ -126,14 +187,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         fftGraph.getViewport().setXAxisBoundsManual(true);
         fftGraph.getViewport().setMinX(0);
-        fftGraph.getViewport().setMaxX(64);
-
-
-
+        fftGraph.getViewport().setMaxX(windowSize);
+        fftImaginary = setImaginary();
     }
-
-
-
 
     @Override
     public void onPause(){
@@ -149,15 +205,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         x = accelValues[0];
         y = accelValues[1];
         z = accelValues[2];
+        mag = calcMagnitude();
         displayValues();
 
         seriesX.appendData(new DataPoint(count,x), true, 256);
         seriesY.appendData(new DataPoint(count,y), true, 256);
         seriesZ.appendData(new DataPoint(count,z), true, 256);
-        seriesMag.appendData(new DataPoint(count,calcMagnitude()), true, 256);
+        seriesMag.appendData(new DataPoint(count,mag), true, 256);
 
     //FFT data stuff
-        fftMag.add(calcMagnitude());
+
 
         if(fftMag.size() == windowSize) {
             fftImaginary = setImaginary();
@@ -167,13 +224,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             fftMag.remove(0);
         }
 
+        fftMag.add(calcMagnitude());
+
         transform.fft(fftMagDouble, fftImaginary);
 
         // loop through and create new datapoint[]
         DataPoint[] currentMagFFT = new DataPoint[windowSize];
-        for(int i = 0; i < windowSize; i++) {
-            currentMagFFT[i] =
-                    new DataPoint(i, fftMagDouble[i]);
+        for(int i = 0; i < getWindowSize(); i++) {
+            currentMagFFT[i] = new DataPoint(i, fftMagDouble[i]);
+//            System.out.println(i + ", " + fftMagDouble[i]);
             }
         seriesFFTMag.resetData(currentMagFFT);
         }
@@ -192,14 +251,32 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
     public void displayValues(){
-        currentX.setText(Float.toString(x));
-        currentY.setText(Float.toString(y));
-        currentZ.setText(Float.toString(z));
-        currentMag.setText(Double.toString(calcMagnitude()));
+//        currentX.setText(Float.toString(x));
+//        currentY.setText(Float.toString(y));
+//        currentZ.setText(Float.toString(z));
+//        currentMag.setText(Double.toString(calcMagnitude()));
+        currentX.setText(getResources().getString(R.string.x, x));
+        currentY.setText(getResources().getString(R.string.y, y));
+        currentZ.setText(getResources().getString(R.string.z, z));
+        currentMag.setText(getResources().getString(R.string.mag, (float) mag));
+
+        windowSizeView.setText(getResources().getString(R.string.window_size_int, getWindowSize()));
+        sampleRateView.setText(getResources().getString(R.string.sample_rate_int, getSampleRate()));
+
+
     }
 
     public double calcMagnitude (){
-
-        return java.lang.Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2) + Math.pow(z, 2));
+        return java.lang.Math.sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
     }
+
+    private float getWindowSize(){
+        return (int) transform.getWindowSize();
+    }
+
+    private float getSampleRate(){
+        return sampleRate;
+    }
+
+
 }
