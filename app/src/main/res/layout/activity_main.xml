@@ -7,26 +7,50 @@
     tools:context=".MainActivity">
 
 
+    <SeekBar
+        android:id="@+id/windowSeekBar"
+        style="@style/Widget.AppCompat.SeekBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:max="10"
+        android:min="1"
+        android:progress="6"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/window_size_int"
+        app:layout_constraintTop_toBottomOf="@+id/fftGraph" />
+
+    <TextView
+        android:id="@+id/windowSize2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="8dp"
+        android:text="@string/window_size"
+        app:layout_constraintEnd_toStartOf="@+id/window_size_int"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/fftGraph" />
+
     <com.jjoe64.graphview.GraphView
         android:id="@+id/graph"
         android:layout_width="match_parent"
         android:layout_height="200dip"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="8dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textView" />
+        app:layout_constraintTop_toBottomOf="@+id/currentX" />
 
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="16dp"
         android:text="@string/raw_graph_title"
         android:textSize="24sp"
-        app:layout_constraintBottom_toTopOf="@+id/graph"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.519"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         tools:text="@string/raw_graph_title" />
@@ -36,63 +60,119 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:text="@string/x"
+        app:layout_constraintEnd_toStartOf="@+id/currentY"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/graph" />
+        app:layout_constraintTop_toBottomOf="@+id/textView" />
 
     <TextView
         android:id="@+id/currentY"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:text="@string/y"
+        app:layout_constraintEnd_toStartOf="@+id/currentZ"
         app:layout_constraintStart_toEndOf="@+id/currentX"
-        app:layout_constraintTop_toBottomOf="@+id/graph" />
+        app:layout_constraintTop_toBottomOf="@+id/textView" />
 
     <TextView
         android:id="@+id/currentZ"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginEnd="16dp"
-        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:text="@string/z"
+        app:layout_constraintEnd_toStartOf="@+id/currentMag"
         app:layout_constraintStart_toEndOf="@+id/currentY"
-        app:layout_constraintTop_toBottomOf="@+id/graph" />
+        app:layout_constraintTop_toBottomOf="@+id/textView" />
 
     <TextView
         android:id="@+id/currentMag"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="16dp"
         android:text="@string/mag"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/currentZ"
+        app:layout_constraintTop_toBottomOf="@+id/textView" />
+
+    <TextView
+        android:id="@+id/textView2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/fft_graph_title"
+        android:textSize="24sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/currentY" />
+        app:layout_constraintTop_toBottomOf="@+id/graph" />
 
     <com.jjoe64.graphview.GraphView
 
         android:id="@+id/fftGraph"
         android:layout_width="match_parent"
         android:layout_height="200dip"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="8dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView2" />
 
-    <TextView
-        android:id="@+id/textView2"
-        android:layout_width="wrap_content"
-        android:layout_height="11dp"
+    <SeekBar
+        android:id="@+id/sampleRateSeekBar"
+        style="@style/Widget.AppCompat.SeekBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="TextView"
+        android:layout_marginEnd="16dp"
+        android:max="1056"
+        android:progress="3"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.508"
+        app:layout_constraintStart_toEndOf="@+id/sample_rate_int"
+        app:layout_constraintTop_toBottomOf="@+id/windowSeekBar" />
+
+    <TextView
+        android:id="@+id/windowSize"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="8dp"
+        android:text="@string/sample_rate"
+        app:layout_constraintEnd_toStartOf="@+id/sample_rate_int"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/currentMag" />
+        app:layout_constraintTop_toBottomOf="@+id/windowSize2" />
+
+    <TextView
+        android:id="@+id/window_size_int"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="8dp"
+        android:text="@string/window_size_int"
+        app:layout_constraintEnd_toStartOf="@+id/windowSeekBar"
+        app:layout_constraintStart_toEndOf="@+id/windowSize2"
+        app:layout_constraintTop_toBottomOf="@+id/fftGraph" />
+
+    <TextView
+        android:id="@+id/sample_rate_int"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="8dp"
+        android:text="@string/sample_rate_int"
+        app:layout_constraintEnd_toStartOf="@+id/sampleRateSeekBar"
+        app:layout_constraintStart_toEndOf="@+id/windowSize"
+        app:layout_constraintTop_toBottomOf="@+id/window_size_int" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>
