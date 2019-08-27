@@ -9,8 +9,13 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.nfc.Tag;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Log;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.Button;
 import android.widget.SeekBar;
 import android.widget.TextView;
 
@@ -19,6 +24,9 @@ import com.jjoe64.graphview.GraphView;
 import com.jjoe64.graphview.series.DataPoint;
 import com.jjoe64.graphview.series.LineGraphSeries;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 
 import static java.lang.Math.pow;
@@ -51,8 +59,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private double doubleWindowSize = windowSize;
     private SeekBar windowSizeBar;
 
-
-    private float sampleRate = 20;
+        // in microSeconds -- 1000000 ms = 1hz
+    private int sampleRate = 1000000;
+    private int sampleRateHz;
     private SeekBar sampleRateBar;
 
 
@@ -65,6 +74,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private ArrayList<Double> fftMag = new ArrayList<Double>();
 
     GraphView fftGraph;
+
+    //LOGGING INITS
+    private FileWriter writer;
+    private boolean loggingNow;
+    private final String TAG = "SensorLog";
+
+    private Button startLoggingButt;
+    private Button stopLoggingButt;
+    private String samplog;
+    private int sampCount;
+
+    /////
+
 
     private double[] setImaginary() {
         double[] temp= new double[windowSize];
@@ -81,11 +103,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         setContentView(R.layout.activity_main);
         //main init for values etc...
         initViews();
+        loggingNow = false;
 
         //Accelerometer sensor inits
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        sampleRateRefresh(16);
 
             //populate x fft for init
         for(int i = 0; i < windowSize; i++) {
@@ -102,6 +125,50 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     currentY = findViewById(R.id.currentY);
     currentZ = findViewById(R.id.currentZ);
     currentMag = findViewById(R.id.currentMag);
+
+    //Logging button Stuff
+
+        startLoggingButt = findViewById(R.id.startLoggingButt);
+        stopLoggingButt = findViewById(R.id.stopLoggingButt);
+
+        startLoggingButt.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                startLoggingButt.setEnabled(false);
+                stopLoggingButt.setEnabled(true);
+                sampCount = 0;
+                Log.d(TAG, "Writing to: " + getStorageDirectory());
+
+                try {
+                    writer = new FileWriter(new File(getStorageDirectory(), "acc_" + System.currentTimeMillis() + ".csv"));
+                    writer.append("Sample Rate: " + sampleRateHz + "Hz; WindowSize: " + getWindowSize() + "\n");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                loggingNow = true;
+                return true;
+            }
+        });
+
+        stopLoggingButt.setOnTouchListener(new View.OnTouchListener() {
+                                               @Override
+                                               public boolean onTouch(View view, MotionEvent motionEvent) {
+                                                   startLoggingButt.setEnabled(true);
+                                                   stopLoggingButt.setEnabled(false);
+                                                   loggingNow = false;
+
+                                                   try {
+                                                       writer.close();
+                                                   } catch (IOException e) {
+                                                       e.printStackTrace();
+                                                   }
+
+                                                   return true;
+                                               }
+                                           }
+
+        );
+
 
     //GraphView Stuff
         //Raw
@@ -167,11 +234,31 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                                      }
 
                                                  });
-            sampleRateBar = findViewById(R.id.sampleRateSeekBar);
 
+        sampleRateBar = findViewById(R.id.sampleRateSeekBar);
 
+        sampleRateBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                sampleRateRefresh(i);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+
+    });
     }
 
+    private String getStorageDirectory() {
+        return this.getExternalFilesDir(null).getAbsolutePath();
+    }
 
 
     public void updateGraph() {
@@ -191,6 +278,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         fftImaginary = setImaginary();
     }
 
+
+    //in microSeconds
+        public void sampleRateRefresh(int hz){
+            sampleRate = hz * 1000000;
+            sampleRateHz = hz;
+            sensorManager.unregisterListener(this);
+            sensorManager.registerListener(this, accelerometer, sampleRate);
+        }
+
     @Override
     public void onPause(){
         super.onPause();
@@ -208,17 +304,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         mag = calcMagnitude();
         displayValues();
 
-        seriesX.appendData(new DataPoint(count,x), true, 256);
-        seriesY.appendData(new DataPoint(count,y), true, 256);
-        seriesZ.appendData(new DataPoint(count,z), true, 256);
-        seriesMag.appendData(new DataPoint(count,mag), true, 256);
+        seriesX.appendData(new DataPoint(count, x), true, 256);
+        seriesY.appendData(new DataPoint(count, y), true, 256);
+        seriesZ.appendData(new DataPoint(count, z), true, 256);
+        seriesMag.appendData(new DataPoint(count, mag), true, 256);
 
-    //FFT data stuff
+        //FFT data stuff
 
 
-        if(fftMag.size() == windowSize) {
+        if (fftMag.size() == windowSize) {
             fftImaginary = setImaginary();
-            for(int i = 0; i < windowSize; i++) {
+            for (int i = 0; i < windowSize; i++) {
                 fftMagDouble[i] = fftMag.get(i);
             }
             fftMag.remove(0);
@@ -230,19 +326,39 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // loop through and create new datapoint[]
         DataPoint[] currentMagFFT = new DataPoint[windowSize];
-        for(int i = 0; i < getWindowSize(); i++) {
+        for (int i = 0; i < getWindowSize(); i++) {
             currentMagFFT[i] = new DataPoint(i, fftMagDouble[i]);
 //            System.out.println(i + ", " + fftMagDouble[i]);
-            }
-        seriesFFTMag.resetData(currentMagFFT);
         }
+        seriesFFTMag.resetData(currentMagFFT);
+
+
+        /////////
+        //LOGGING STUFF HERE
+        /////////
+
+        if (loggingNow) {
+            try {
+                sampCount++;
+                samplog = "" + sampCount;
+                writer.append(samplog);
+                for (int i = 0; i < getWindowSize(); i++) {
+                    writer.append(", " + currentMagFFT[i]);
+                }
+                writer.append("\n");
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
 
 
     @Override
     public void onResume() {
         super.onResume();
-        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorManager.registerListener(this, accelerometer, sampleRate);
     }
 
 
@@ -275,7 +391,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     private float getSampleRate(){
-        return sampleRate;
+        return sampleRateHz;
     }
 
 
