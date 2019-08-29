@@ -9,6 +9,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.MediaPlayer;
 import android.nfc.Tag;
 import android.os.Bundle;
 import android.os.Handler;
@@ -29,6 +30,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import static java.lang.Math.abs;
 import static java.lang.Math.pow;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
@@ -55,7 +57,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
     //FFT graph
-    private int windowSize = 64;
+    private int windowSize = 8;
     private double doubleWindowSize = windowSize;
     private SeekBar windowSizeBar;
 
@@ -87,6 +89,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     /////
 
+    //Media stuff
+    private MediaPlayer standingSound = new MediaPlayer();
+    private MediaPlayer walkingSound= new MediaPlayer();
+    private MediaPlayer joggingSound = new MediaPlayer();
+
+    private int meanCounter = 20;
+    private double meanFFTthresh;
+    private double[] threshFFTarr = new double[meanCounter];
+
 
     private double[] setImaginary() {
         double[] temp= new double[windowSize];
@@ -108,7 +119,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //Accelerometer sensor inits
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        sampleRateRefresh(16);
+        sampleRateRefresh(60);
 
             //populate x fft for init
         for(int i = 0; i < windowSize; i++) {
@@ -116,6 +127,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
         fftImaginary = setImaginary();
 
+        //
+        //Media Stuff
+        //
+        standingSound = MediaPlayer.create(this, R.raw.standing);
+        walkingSound = MediaPlayer.create(this, R.raw.walking);
+        joggingSound = MediaPlayer.create(this, R.raw.jogging);
 
     }
 
@@ -140,8 +157,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 Log.d(TAG, "Writing to: " + getStorageDirectory());
 
                 try {
-                    writer = new FileWriter(new File(getStorageDirectory(), "acc_" + System.currentTimeMillis() + ".csv"));
-                    writer.append("Sample Rate: " + sampleRateHz + "Hz; WindowSize: " + getWindowSize() + "\n");
+                    writer = new FileWriter(new File(getStorageDirectory(), "acc_" + System.currentTimeMillis() + "SR" + sampleRateHz + "WS" + getWindowSize() + ".csv"));
+                    writer.append("sample, mag");
+                    for(Integer i = 0;i<getWindowSize();i++) {
+                        writer.append(", " + i.toString());
+                    }
+                    writer.append("\n");
+
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -328,10 +350,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         DataPoint[] currentMagFFT = new DataPoint[windowSize];
         for (int i = 0; i < getWindowSize(); i++) {
             currentMagFFT[i] = new DataPoint(i, fftMagDouble[i]);
-//            System.out.println(i + ", " + fftMagDouble[i]);
         }
-        seriesFFTMag.resetData(currentMagFFT);
 
+        playSound(fftThresholds(fftMagDouble[windowSize/2], count % meanCounter));
+
+        seriesFFTMag.resetData(currentMagFFT);
 
         /////////
         //LOGGING STUFF HERE
@@ -341,9 +364,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             try {
                 sampCount++;
                 samplog = "" + sampCount;
-                writer.append(samplog);
+                writer.append(samplog + ", " + mag);
                 for (int i = 0; i < getWindowSize(); i++) {
-                    writer.append(", " + currentMagFFT[i]);
+                    writer.append(", " + fftMagDouble[i]);
                 }
                 writer.append("\n");
 
@@ -367,16 +390,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
     public void displayValues(){
-//        currentX.setText(Float.toString(x));
-//        currentY.setText(Float.toString(y));
-//        currentZ.setText(Float.toString(z));
-//        currentMag.setText(Double.toString(calcMagnitude()));
         currentX.setText(getResources().getString(R.string.x, x));
         currentY.setText(getResources().getString(R.string.y, y));
         currentZ.setText(getResources().getString(R.string.z, z));
         currentMag.setText(getResources().getString(R.string.mag, (float) mag));
 
-        windowSizeView.setText(getResources().getString(R.string.window_size_int, getWindowSize()));
+        windowSizeView.setText(getResources().getString(R.string.window_size_int, getWindowSize()));https://github.com/arpitgandhi9/soundtouch-example-android
         sampleRateView.setText(getResources().getString(R.string.sample_rate_int, getSampleRate()));
 
 
@@ -394,5 +413,71 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return sampleRateHz;
     }
 
+//    SOUND  STUFF
+
+    private void stopSounds() {
+        standingSound.stop();
+        walkingSound.stop();
+        joggingSound.stop();
+    }
+
+    //playsound(fftThresholds(chuck fft[32] in there)
+
+    private void playSound(String activity){
+//        stopSounds();
+        System.out.println(activity);
+        meanFFTthresh =0;
+
+        switch(activity){
+            case("standing"):
+                standingSound.start();
+
+                break;
+            case("walking"):
+                walkingSound.start();
+                break;
+                case("jogging"):
+                    joggingSound.start();
+                    break;
+                }
+            }
+
+            //take bin 32
+            private String fftThresholds (double fftData, int counter) {
+                fftData = abs(fftData);
+
+//                if(fftData > meanFFTthresh){meanFFTthresh = fftData;}
+                //meanFFTthresh = (meanFFTthresh += fftData) / counter + 1;
+                //gotta get mean threshhold
+
+                threshFFTarr[counter] = fftData;
+
+
+//                        meanFFTthresh = (fftData + meanFFTthresh) / (counter +1);
+
+
+
+                //values for bin 32
+                if(counter == 0) {
+                    //get mean of all counts
+                    for(int i = 0; i< threshFFTarr.length;i++){
+                        meanFFTthresh += threshFFTarr[i];
+                    }
+                    meanFFTthresh /= threshFFTarr.length;
+                    //
+                    if (meanFFTthresh < 1.5) {
+                        return "standing";
+                    } else if (meanFFTthresh >= 1.5 && meanFFTthresh < 15) {
+                        return "walking";
+                    } else if (meanFFTthresh >= 15) {
+                        return "jogging";
+                    }
+                }
+                return "";
+            }
+
+
 
 }
+
+
