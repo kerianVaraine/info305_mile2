@@ -1,4 +1,4 @@
 package com.info305.milestone2;
 
-public class FFTThreshold {
+public class ActivityRecognition {
 }

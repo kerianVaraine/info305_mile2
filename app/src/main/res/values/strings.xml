@@ -13,6 +13,8 @@
     <string name="sample_rate_int">%1.1f</string>
     <string name="startLogging">Start Logging</string>
     <string name="stopLogging">Stop Logging</string>
+    <string name="startSounds">Start Sounds</string>
+    <string name="stopSounds">Stop Sounds</string>
 
 
 </resources>

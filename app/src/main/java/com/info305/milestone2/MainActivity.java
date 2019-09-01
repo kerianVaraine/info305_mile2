@@ -1,14 +1,21 @@
 package com.info305.milestone2;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.media.MediaPlayer;
 import android.nfc.Tag;
 import android.os.Bundle;
@@ -28,6 +35,7 @@ import com.jjoe64.graphview.series.LineGraphSeries;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 
 import static java.lang.Math.abs;
@@ -41,27 +49,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private float x, y, z;
     private double mag;
 
-    private ArrayList<Float> xValue = new ArrayList<Float>();
 
     private TextView currentX, currentY, currentZ, currentMag, windowSizeView, sampleRateView;
 
-//Graph stuff for raw data
+    //Graph stuff for raw data
     int count;
 
-    private final Handler mHandler = new Handler();
     private LineGraphSeries seriesX;
     private LineGraphSeries seriesY;
     private LineGraphSeries seriesZ;
     private LineGraphSeries seriesMag;
 
 
-
     //FFT graph
     private int windowSize = 8;
-    private double doubleWindowSize = windowSize;
     private SeekBar windowSizeBar;
 
-        // in microSeconds -- 1000000 ms = 1hz
+    // in microSeconds -- 1000000 ms = 1hz
     private int sampleRate = 1000000;
     private int sampleRateHz;
     private SeekBar sampleRateBar;
@@ -90,17 +94,30 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     /////
 
     //Media stuff
+    private boolean isplayingSounds = false;
+    private Button playSounds;
+    private Button stopSounds;
+
+
     private MediaPlayer standingSound = new MediaPlayer();
-    private MediaPlayer walkingSound= new MediaPlayer();
+    private MediaPlayer walkingSound = new MediaPlayer();
     private MediaPlayer joggingSound = new MediaPlayer();
 
-    private int meanCounter = 20;
+    private int meanCounter = 20;//this and sample rate combined decide time it takes sample rate 60hz,
     private double meanFFTthresh;
     private double[] threshFFTarr = new double[meanCounter];
 
+    //Speed stuff
+
+    private LocationManager locationManager;
+    private Location oldLocation;
+    private Location newLocation;
+    private LocationListener locationListener;
+    private double currentSpeed;
+
 
     private double[] setImaginary() {
-        double[] temp= new double[windowSize];
+        double[] temp = new double[windowSize];
         for (int i = 0; i < windowSize; i++) {
             temp[i] = 0;
         }
@@ -118,35 +135,54 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //Accelerometer sensor inits
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         sampleRateRefresh(60);
 
-            //populate x fft for init
-        for(int i = 0; i < windowSize; i++) {
+        //location shit
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        oldLocation = new Location(locationManager.GPS_PROVIDER);
+        newLocation = new Location(locationManager.GPS_PROVIDER);
+        locationListener = new MyLocationListener();
+
+
+        //populate x fft for init
+        for (int i = 0; i < windowSize; i++) {
             fftMagDouble[i] = 0;
         }
         fftImaginary = setImaginary();
 
-        //
-        //Media Stuff
-        //
-        standingSound = MediaPlayer.create(this, R.raw.standing);
-        walkingSound = MediaPlayer.create(this, R.raw.walking);
-        joggingSound = MediaPlayer.create(this, R.raw.jogging);
+//        //
+//        //Media Stuff
+//        //
+//        standingSound = MediaPlayer.create(this, R.raw.standing);
+//        walkingSound = MediaPlayer.create(this, R.raw.walking);
+//        joggingSound = MediaPlayer.create(this, R.raw.jogging);
 
+        //speed stuff
+        try {
+            if (ContextCompat.checkSelfPermission(getApplicationContext(), android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, 101);
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
+
 
     //INITS
     public void initViews() {
-    currentX = findViewById(R.id.currentX);
-    currentY = findViewById(R.id.currentY);
-    currentZ = findViewById(R.id.currentZ);
-    currentMag = findViewById(R.id.currentMag);
+        currentX = findViewById(R.id.currentX);
+        currentY = findViewById(R.id.currentY);
+        currentZ = findViewById(R.id.currentZ);
+        currentMag = findViewById(R.id.currentMag);
 
-    //Logging button Stuff
+        //Logging button Stuff
 
         startLoggingButt = findViewById(R.id.startLoggingButt);
         stopLoggingButt = findViewById(R.id.stopLoggingButt);
+
+        stopLoggingButt.setEnabled(false);
 
         startLoggingButt.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -159,7 +195,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 try {
                     writer = new FileWriter(new File(getStorageDirectory(), "acc_" + System.currentTimeMillis() + "SR" + sampleRateHz + "WS" + getWindowSize() + ".csv"));
                     writer.append("sample, mag");
-                    for(Integer i = 0;i<getWindowSize();i++) {
+                    for (Integer i = 0; i < getWindowSize(); i++) {
                         writer.append(", " + i.toString());
                     }
                     writer.append("\n");
@@ -192,7 +228,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         );
 
 
-    //GraphView Stuff
+        //GraphView Stuff
         //Raw
         GraphView graph = (GraphView) findViewById(R.id.graph);
 
@@ -224,7 +260,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         graph.getViewport().setBackgroundColor(Color.BLACK);
 
         //FFT graph
-            updateGraph();
+        updateGraph();
 
         //fft slider shit
         windowSizeView = findViewById(R.id.window_size_int);
@@ -234,28 +270,27 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         windowSizeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
 
 
-                                                     @Override
-                                                     public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
-                                                         windowSize =(int) pow(2, (i+1)-1);
-                                                         transform.setWindowSize((windowSize));
-                                                         fftImaginary = new double[transform.getWindowSize()];
-                                                         fftMag.clear();
-                                                         fftMagDouble = new double[transform.getWindowSize()];
-                                                         updateGraph();
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
+                windowSize = (int) pow(2, (i + 1) - 1);
+                transform.setWindowSize((windowSize));
+                fftImaginary = new double[transform.getWindowSize()];
+                fftMag.clear();
+                fftMagDouble = new double[transform.getWindowSize()];
+                updateGraph();
+            }
 
-                                                     }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
 
-                                                     @Override
-                                                     public void onStartTrackingTouch(SeekBar seekBar) {
+            }
 
-                                                     }
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
 
-                                                     @Override
-                                                     public void onStopTrackingTouch(SeekBar seekBar) {
+            }
 
-                                                     }
-
-                                                 });
+        });
 
         sampleRateBar = findViewById(R.id.sampleRateSeekBar);
 
@@ -275,7 +310,39 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             }
 
-    });
+        });
+
+        /////
+        //MEDIA STUFF
+        /////
+    playSounds = findViewById(R.id.playSounds);
+    stopSounds = findViewById(R.id.stopSounds);
+        stopSounds.setEnabled(false);
+
+
+        playSounds.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                playSounds.setEnabled(false);
+                stopSounds.setEnabled(true);
+                registerMedia();
+                isplayingSounds = true;
+                return true;
+            }
+        });
+
+        stopSounds.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                playSounds.setEnabled(true);
+                stopSounds.setEnabled(false);
+                isplayingSounds = false;
+                pauseSounds();
+                return true;
+            }
+        });
+
+
     }
 
     private String getStorageDirectory() {
@@ -302,22 +369,26 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
     //in microSeconds
-        public void sampleRateRefresh(int hz){
-            sampleRate = hz * 1000000;
-            sampleRateHz = hz;
-            sensorManager.unregisterListener(this);
-            sensorManager.registerListener(this, accelerometer, sampleRate);
-        }
-
-    @Override
-    public void onPause(){
-        super.onPause();
+    public void sampleRateRefresh(int hz) {
+        sampleRate = hz * 1000000;
+        sampleRateHz = hz;
         sensorManager.unregisterListener(this);
+        sensorManager.registerListener(this, accelerometer, sampleRate);
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+        sensorManager.unregisterListener(this);
+        stopSounds();
+    }
+
+    @SuppressLint("MissingPermission")
+    @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         count++;
+
+//        System.out.println(getSpeed(oldLocation, newLocation));
 
         float[] accelValues = sensorEvent.values;
         x = accelValues[0];
@@ -332,7 +403,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         seriesMag.appendData(new DataPoint(count, mag), true, 256);
 
         //FFT data stuff
-
 
         if (fftMag.size() == windowSize) {
             fftImaginary = setImaginary();
@@ -352,7 +422,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             currentMagFFT[i] = new DataPoint(i, fftMagDouble[i]);
         }
 
-        playSound(fftThresholds(fftMagDouble[windowSize/2], count % meanCounter));
+        ///BUTTON ON/OFF
+        if(isplayingSounds) {
+            playSound(fftThresholds(fftMagDouble[windowSize / 2], count % meanCounter));
+        }else {
+            pauseSounds();
+        }
 
         seriesFFTMag.resetData(currentMagFFT);
 
@@ -377,25 +452,39 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
 
-
     @Override
     public void onResume() {
         super.onResume();
         sensorManager.registerListener(this, accelerometer, sampleRate);
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    Activity#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for Activity#requestPermissions for more details.
+            return;
+        }
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0,0,locationListener);
+        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+        //
+        //Media Stuff
+        //
+
     }
 
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {}
 
-
     public void displayValues(){
-        currentX.setText(getResources().getString(R.string.x, x));
+        currentX.setText(getResources().getString(R.string.x, currentSpeed)); /// changed to test get speed
         currentY.setText(getResources().getString(R.string.y, y));
         currentZ.setText(getResources().getString(R.string.z, z));
         currentMag.setText(getResources().getString(R.string.mag, (float) mag));
 
-        windowSizeView.setText(getResources().getString(R.string.window_size_int, getWindowSize()));https://github.com/arpitgandhi9/soundtouch-example-android
+        windowSizeView.setText(getResources().getString(R.string.window_size_int, getWindowSize()));//https://github.com/arpitgandhi9/soundtouch-example-android
         sampleRateView.setText(getResources().getString(R.string.sample_rate_int, getSampleRate()));
 
 
@@ -415,17 +504,27 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 //    SOUND  STUFF
 
+    private void registerMedia(){
+        standingSound = MediaPlayer.create(this, R.raw.standing);
+        walkingSound = MediaPlayer.create(this, R.raw.walking);
+        joggingSound = MediaPlayer.create(this, R.raw.jogging);
+    }
+
+    private void pauseSounds() {
+        standingSound.reset();
+        walkingSound.reset();
+        joggingSound.reset();
+    }
+
     private void stopSounds() {
         standingSound.stop();
         walkingSound.stop();
         joggingSound.stop();
     }
 
-    //playsound(fftThresholds(chuck fft[32] in there)
-
+    //playsound(fftThresholds(chuck fft[windowsize / 2] in there)
     private void playSound(String activity){
-//        stopSounds();
-        System.out.println(activity);
+
         meanFFTthresh =0;
 
         switch(activity){
@@ -439,45 +538,86 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 case("jogging"):
                     joggingSound.start();
                     break;
+            case("pause"):
+                pauseSounds();
+                break;
                 }
             }
 
             //take bin 32
             private String fftThresholds (double fftData, int counter) {
                 fftData = abs(fftData);
-
-//                if(fftData > meanFFTthresh){meanFFTthresh = fftData;}
-                //meanFFTthresh = (meanFFTthresh += fftData) / counter + 1;
-                //gotta get mean threshhold
-
                 threshFFTarr[counter] = fftData;
+                //values for bin = windowwidth / 2
+                if (counter == 0) {
 
-
-//                        meanFFTthresh = (fftData + meanFFTthresh) / (counter +1);
-
-
-
-                //values for bin 32
-                if(counter == 0) {
                     //get mean of all counts
-                    for(int i = 0; i< threshFFTarr.length;i++){
+                    for (int i = 0; i < threshFFTarr.length; i++) {
                         meanFFTthresh += threshFFTarr[i];
                     }
                     meanFFTthresh /= threshFFTarr.length;
                     //
-                    if (meanFFTthresh < 1.5) {
-                        return "standing";
-                    } else if (meanFFTthresh >= 1.5 && meanFFTthresh < 15) {
-                        return "walking";
-                    } else if (meanFFTthresh >= 15) {
-                        return "jogging";
+                    if (currentSpeed < 13) {
+                        if (meanFFTthresh < 2) {
+                            return "standing";
+                        } else if (meanFFTthresh >= 2 && meanFFTthresh < 20) {
+                            return "walking";
+                        } else if (meanFFTthresh >= 20) {
+                            return "jogging";
+                        }
+                    } else if (currentSpeed >= 12) {
+                        return "pause";
                     }
+
                 }
                 return "";
+
             }
 
+            ///SPEED STUFF
 
 
-}
+    private class MyLocationListener implements LocationListener{
+        private Location mLastLocation;
+
+        @Override
+        public void onLocationChanged(Location pCurrentLocation) {
+            //calcul manually speed
+            double speed = 0;
+            if (this.mLastLocation != null)
+                speed = Math.sqrt(
+                        Math.pow(pCurrentLocation.getLongitude() - mLastLocation.getLongitude(), 2)
+                                + Math.pow(pCurrentLocation.getLatitude() - mLastLocation.getLatitude(), 2)
+                ) / (pCurrentLocation.getTime() - this.mLastLocation.getTime());
+            //if there is speed from location
+            if (pCurrentLocation.hasSpeed())
+                //get location speed
+
+//                speed = pCurrentLocation.getSpeed(); m/s
+            speed = (int) ((pCurrentLocation.getSpeed() * 3600) / 1000); //km/h
+            this.mLastLocation = pCurrentLocation;
+            currentSpeed = speed;
+        }
+
+        @Override
+        public void onStatusChanged(String s, int i, Bundle bundle) {
+
+        }
+
+        @Override
+        public void onProviderEnabled(String s) {
+
+        }
+
+        @Override
+        public void onProviderDisabled(String s) {
+
+        }
+    }
+
+
+
+
+    }
 
 
