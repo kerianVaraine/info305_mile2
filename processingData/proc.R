@@ -46,16 +46,18 @@ jogging.range <- as_tibble(apply(jogging.abs, 2, range)) %>% gather()
 ####################
 #mean plot for all
 ggplot() +
+  labs(title="accel. data for each activity", y= "value") +
     geom_line(data = standing.mean.tall, aes(x=seq(1:63), y=abs(value)), color = 'red') +
     geom_line(data = walking.mean.tall, aes(x=seq(1:63), y=abs(value)), color = 'blue') +
     geom_line(data = jogging.mean.tall, aes(x=seq(1:63), y=abs(value)), color = 'green') +
-  scale_x_continuous("frequency bin", seq(1:63))
+  scale_x_continuous("frequency bin", seq(1:63)) 
 
 ggplot() +
-  geom_point(data = standing.range, aes(x=seq(1:126), y=abs(value)), color = 'red') +
+  geom_point(data = standing.range, aes(x=standing.range$key, y=abs(value)), color = 'red') +
   geom_point(data = walking.range, aes(x=seq(1:126), y=abs(value)), color = 'blue') +
-  geom_point(data = jogging.range, aes(x=seq(1:126), y=abs(value)), color = 'green') +
-  scale_x_continuous("frequency bin", seq(1:63))
+  geom_point(data = jogging.range, aes(x=seq(1:126), y=abs(value)), color = 'green') 
+#+
+ # scale_x_continuous("frequency bin", seq(1:128/2))
   
 #########################
 # 
