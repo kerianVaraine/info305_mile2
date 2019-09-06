@@ -1,20 +1,5 @@
 <resources>
-    <string name="app_name">Accelerometer Milestone 2</string>
-    <string name="raw_graph_title">Raw Accel. graph</string>
-    <string name="x">X: %1$.4f</string>
-    <string name="y">Y: %1$.4f</string>
-    <string name="z">Z: %1$.4f</string>
-    <string name="mag">Mag: %1$.4f</string>
-    <string name="fft_graph_title">FFT Accel. graph</string>
-    <string name="fft_mag">Mag: %1.4f</string>
-    <string name="window_size">Win.Size</string>
-    <string name="sample_rate">Samp. Rate</string>
-    <string name="window_size_int">%1.1f</string>
-    <string name="sample_rate_int">%1.1f</string>
-    <string name="startLogging">Start Logging</string>
-    <string name="stopLogging">Stop Logging</string>
+    <string name="app_name">Activity based sound player</string>
     <string name="startSounds">Start Sounds</string>
     <string name="stopSounds">Stop Sounds</string>
-
-
 </resources>
