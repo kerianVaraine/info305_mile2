@@ -293,7 +293,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         });
 
         sampleRateBar = findViewById(R.id.sampleRateSeekBar);
-
         sampleRateBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int i, boolean b) {
@@ -309,7 +308,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             public void onStopTrackingTouch(SeekBar seekBar) {
 
             }
-
         });
 
         /////
